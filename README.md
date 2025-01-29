@@ -66,98 +66,91 @@ def lambda_handler(event, context):
 
 ### Challenge Phase
 
-**Scenario:**
-Build a Lambda function that processes a JSON input payload and performs basic arithmetic operations.
+### **Objective**
+Students will deploy an AWS **Lambda function** that processes a **CSV file** stored in **S3**, converts it into **LDIF format**, and re-uploads it to a specific path in the bucket.
 
-#### Task Instructions:
-1. **Create a Lambda Function**
-   - Use Python 3.9 as the runtime.
-   - Name your function `student-math-<your-username>`.
-   - Use the existing role from the walkthrough.
 
-2. **Write the Lambda Code**
-   - You can find sample code below
-   - The function should:
-     - Accept a JSON payload with two numbers (`num1` and `num2`) and an operation (`add`, `subtract`, `multiply`, `divide`).
-     - Perform the specified operation and return the result.
-     - Handle invalid operations or missing keys gracefully.
+### **Challenge Instructions**
+1. **Create an S3 bucket** named `codeyou-student-devops-<username>`.
+    - S3 doesn't allow `_` so you may need to change it to `-` instead.
+    - Be sure to add a tag of `Owner=<username>`
+2. **Write the sample CSV data** below into a file named `users.csv` and upload it to `input/users.csv` in the bucket.
+3. **Deploy the Lambda function** provided below.
+    - Be sure to add a tag of `Owner=<username>`
+4. **Set the required environment variables** by referring to the `os.environ` lines in the code.
+5. **Execute the Lambda function** and verify that the processed LDIF file appears in `output/converted_users.ldif`.
 
-   - Example input:
-     ```json
-     {
-       "num1": 10,
-       "num2": 5,
-       "operation": "add"
-     }
-     ```
-   - Example output:
-     ```json
-     {
-       "result": 15
-     }
-     ```
-
-3. **Test Your Function**
-   - Create multiple test cases with different operations and input values.
-   - Verify that the function handles edge cases such as division by zero or invalid operations.
-
-4. **Tag the Function**
-   - Add the `Owner` tag with your username.
-
-5. **Monitor Metrics**
-   - Explore the metrics after multiple test executions.
-
-**Bonus Challenge:**
-- Configure an Amazon API Gateway to trigger your Lambda function.
-- Test the Lambda function using an HTTP request.
-
-**Submission:**
-- Provide a text file with:
-  - The function name and ARN.
-  - Screenshots of successful test executions.
-  - (Bonus) A screenshot of the API Gateway integration.
+> **Note:** Use the IAM role **`DevOpsClassChallengeLambdaFunctionRole`** for your Lambda function permissions.  
+> **Note:** Ensure that you are using Python 3.13 runtime
 
 ---
 
-### Sample Python Code for Challenge
+### **Sample CSV Data**
+Save this content as `users.csv` before uploading to S3:
+   ```csv
+   uid,cn,sn,mail,uidNumber,gidNumber,homeDirectory,loginShell
+   jdoe,John Doe,Doe,jdoe@example.com,1005,1000,/home/jdoe,/bin/bash
+   asmith,Alice Smith,Smith,asmith@example.com,1006,1001,/home/asmith,/bin/bash
+   ```
 
+---
+
+### **Lambda Function Code**
 ```python
-import json
+import boto3
+import csv
+import os
+from io import StringIO
+
+s3_client = boto3.client("s3")
+
+S3_BUCKET = os.environ.get("S3_BUCKET")
+CSV_KEY = os.environ.get("CSV_FILE_KEY")
+LDIF_KEY = os.environ.get("LDIF_FILE_KEY", "output/converted_users.ldif")
+
+def convert_csv_to_ldif(csv_content):
+    ldif_entries = []
+    csv_reader = csv.DictReader(StringIO(csv_content))
+    for row in csv_reader:
+        ldif_entry = f"""dn: uid={row['uid']},ou=Users,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+cn: {row['cn']}
+sn: {row['sn']}
+mail: {row['mail']}
+uid: {row['uid']}
+uidNumber: {row['uidNumber']}
+gidNumber: {row['gidNumber']}
+homeDirectory: {row['homeDirectory']}
+loginShell: {row['loginShell']}
+
+"""
+        ldif_entries.append(ldif_entry)
+    return "\n".join(ldif_entries)
 
 def lambda_handler(event, context):
-    """Lambda function to perform basic arithmetic operations."""
     try:
-        num1 = event['num1']
-        num2 = event['num2']
-        operation = event['operation']
-
-        if operation == 'add':
-            result = num1 + num2
-        elif operation == 'subtract':
-            result = num1 - num2
-        elif operation == 'multiply':
-            result = num1 * num2
-        elif operation == 'divide':
-            if num2 == 0:
-                return {
-                    'statusCode': 400,
-                    'body': json.dumps('Error: Division by zero is not allowed')
-                }
-            result = num1 / num2
-        else:
-            return {
-                'statusCode': 400,
-                'body': json.dumps(f"Error: Invalid operation '{operation}'")
-            }
-
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'result': result})
-        }
-    except KeyError as e:
-        return {
-            'statusCode': 400,
-            'body': json.dumps(f"Error: Missing key {str(e)}")
-        }
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=CSV_KEY)
+        csv_content = response["Body"].read().decode("utf-8")
+        ldif_content = convert_csv_to_ldif(csv_content)
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=LDIF_KEY,
+            Body=ldif_content.encode("utf-8"),
+            ContentType="text/plain"
+        )
+        return {"statusCode": 200, "body": f"Successfully converted {CSV_KEY} to {LDIF_KEY}."}
+    except Exception as e:
+        return {"statusCode": 500, "body": f"Error: {str(e)}"}
 ```
+
+---
+
+### **Expected S3 Paths**
+- **Input CSV file:** `s3://codeyou-student-devops-<username>/input/users.csv`
+- **Output LDIF file:** `s3://codeyou-student-devops-<username>/output/converted_users.ldif`
+
+
+Good luck!
 
