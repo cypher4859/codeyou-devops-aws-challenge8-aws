@@ -14,7 +14,7 @@ Students will gain hands-on experience creating, configuring, and testing an AWS
 4. Select **Author from scratch**.
 5. Configure the function:
    - **Function name**: `student-function-<your-username>`
-   - **Runtime**: Python 3.9
+   - **Runtime**: Python 3.9 or latest python
    - **Role**: Choose "Create a new role with basic Lambda permissions".
 6. Click **Create function**.
 
